@@ -8,7 +8,8 @@
 #define DATA_PIN 6
 #define STATUS_LED_PIN 7
 #define DATA_LED_PIN 8
-#define REDLINE 8000
+#define WARM_REDLINE 8000
+#define COLD_REDLINE 6000
 #define NUM_COLORS 4
 #define BASE_RPM 500
 
@@ -18,45 +19,11 @@ CRGB leds[NUM_LEDS];
 int breakpoints[NUM_LEDS];
 CRGB colors[NUM_LEDS];
 
-unsigned char Flag_Recv = 0;
+unsigned char warmed_up = 0;
+unsigned char flag_recv = 0;
 unsigned char len = 0;
 unsigned char buf[8];
 char str[20];
-
-void setup()
-{
-    pinMode(STATUS_LED_PIN, OUTPUT);
-    pinMode(DATA_LED_PIN, OUTPUT);
-    Serial.begin(115200);
-    setup_breakpoints();
-    setup_colors();
-    Serial.println("Booting LEDs");
-    resetAllLEDs(CRGB::Purple);
-    FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
-    FastLED.show();
-    Serial.println("Booting CANbus");
-    
-START_INIT:
-
-    if(CAN_OK == CAN.begin(CAN_1000KBPS))
-    {
-        Serial.println("CAN BUS Shield init ok!");
-        digitalWrite(STATUS_LED_PIN, HIGH);
-    }
-    else
-    {
-        Serial.println("CAN BUS Shield init fail");
-        Serial.println("Init CAN BUS Shield again");
-        delay(100);
-        goto START_INIT;
-    }
-    attachInterrupt(0, MCP2515_ISR, FALLING); // start interrupt
-}
-
-void MCP2515_ISR()
-{
-     Flag_Recv = 1;
-}
 
 void resetAllLEDs(CRGB color)
 {
@@ -66,9 +33,9 @@ void resetAllLEDs(CRGB color)
     }
 }
 
-void setup_breakpoints()
+void setup_breakpoints(int redline)
 {
-  int step = REDLINE / NUM_LEDS;
+  int step = redline / NUM_LEDS;
   breakpoints[0] = BASE_RPM;
   for(int i=1; i<NUM_LEDS; i++) {
     breakpoints[i] = breakpoints[i-1] + step;
@@ -76,7 +43,7 @@ void setup_breakpoints()
     Serial.print(breakpoints[i]);
   }
   Serial.print("Redline at ");
-  Serial.println(REDLINE);
+  Serial.println(redline);
 }
 
 void setup_colors()
@@ -102,15 +69,56 @@ void displayRPM(unsigned char buffer[8])
   FastLED.show();
 } 
 
+void MCP2515_ISR()
+{
+     flag_recv = 1;
+}
+
+void setup()
+{
+    pinMode(STATUS_LED_PIN, OUTPUT);
+    pinMode(DATA_LED_PIN, OUTPUT);
+    Serial.begin(115200);
+    setup_breakpoints(COLD_REDLINE);
+    setup_colors();
+    Serial.println("Booting LEDs");
+    resetAllLEDs(CRGB::Purple);
+    FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
+    FastLED.show();
+    Serial.println("Booting CANbus");
+    
+START_INIT:
+
+    if(CAN_OK == CAN.begin(CAN_1000KBPS))
+    {
+        Serial.println("CAN BUS Shield init ok!");
+        digitalWrite(STATUS_LED_PIN, HIGH);
+    }
+    else
+    {
+        Serial.println("CAN BUS Shield init fail");
+        Serial.println("Init CAN BUS Shield again");
+        delay(100);
+        goto START_INIT;
+    }
+    attachInterrupt(0, MCP2515_ISR, FALLING); // start interrupt
+}
+
 void loop()
 {
-    if(Flag_Recv)
+    if(flag_recv)
     {
         digitalWrite(DATA_LED_PIN, HIGH);
-        Flag_Recv = 0;
+        flag_recv = 0;
         CAN.readMsgBuf(&len, buf);
-        if (len > 6)
+        if (len > 6) {
+          if((!warmed_up) && (buf[5] > 178)) // Temperature: DegC * 1.6 + 64. So, 71C * 1.6 + 64 = 178 temp constant for "warm engine"
+          {
+            warmed_up = 1;
+            setup_breakpoints(WARM_REDLINE);
+          }
           displayRPM(buf);
+        }
         digitalWrite(DATA_LED_PIN, LOW);
     }
 }
