@@ -82,19 +82,16 @@ void setup_breakpoints()
 void setup_colors()
 {
   CRGB base_colors[NUM_COLORS] = {CRGB::Green, CRGB::Green, CRGB::Yellow, CRGB::Red};
-  int step = NUM_LEDS / NUM_COLORS;
-  for(int c=0; c<NUM_COLORS; c++)
+  int divider = NUM_LEDS / NUM_COLORS;
+  for(int c=0; c<NUM_LEDS; c++)
   {
-    for (int i=0; i<step; i++) {
-      colors[i] = base_colors[c];
-    }
+      colors[c] = base_colors[c/divider];
   }
 }
 
 void displayRPM(unsigned char buffer[8])
 {
   int rpm = (buffer[2] << 8) | buffer[3];
-  Serial.println(rpm);
   resetAllLEDs(CRGB::Black);
   char i = NUM_LEDS;
   while(i>0) {
@@ -107,18 +104,13 @@ void displayRPM(unsigned char buffer[8])
 
 void loop()
 {
-    if(Flag_Recv)                   // check if get data
+    if(Flag_Recv)
     {
         digitalWrite(DATA_LED_PIN, HIGH);
-        Flag_Recv = 0;                // clear flag
-        CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
+        Flag_Recv = 0;
+        CAN.readMsgBuf(&len, buf);
         if (len > 6)
           displayRPM(buf);
-        for(int i = 0; i<len; i++)    // print the data
-        {
-            Serial.print(buf[i]);Serial.print("\t");
-        }
-        Serial.println();
         digitalWrite(DATA_LED_PIN, LOW);
     }
 }
