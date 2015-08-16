@@ -3,24 +3,35 @@
 #include <mcp_can.h>
 #include <mcp_can_dfs.h>
 
-MCP_CAN CAN(10);
+#define CAN_CS_PIN 10
+#define NUM_LEDS 8
+#define DATA_PIN 6
+#define STATUS_LED_PIN 7
+#define DATA_LED_PIN 8
+#define REDLINE 8000
+#define NUM_COLORS 4
+#define BASE_RPM 500
+
+MCP_CAN CAN(CAN_CS_PIN);
+
+CRGB leds[NUM_LEDS];
+int breakpoints[NUM_LEDS];
+CRGB colors[NUM_LEDS];
+
 unsigned char Flag_Recv = 0;
 unsigned char len = 0;
 unsigned char buf[8];
 char str[20];
-#define NUM_LEDS 6
-#define DATA_PIN 6
-#define STATUS_LED_PIN 7
-#define DATA_LED_PIN 8
-CRGB leds[NUM_LEDS];
 
 void setup()
 {
     pinMode(STATUS_LED_PIN, OUTPUT);
     pinMode(DATA_LED_PIN, OUTPUT);
     Serial.begin(115200);
+    setup_breakpoints();
+    setup_colors();
     Serial.println("Booting LEDs");
-    resetAllLEDs(CRGB::Black);
+    resetAllLEDs(CRGB::Purple);
     FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
     FastLED.show();
     Serial.println("Booting CANbus");
@@ -55,23 +66,42 @@ void resetAllLEDs(CRGB color)
     }
 }
 
+void setup_breakpoints()
+{
+  int step = REDLINE / NUM_LEDS;
+  breakpoints[0] = BASE_RPM;
+  for(int i=1; i<NUM_LEDS; i++) {
+    breakpoints[i] = breakpoints[i-1] + step;
+    Serial.println("Breakpoint at ");
+    Serial.print(breakpoints[i]);
+  }
+  Serial.print("Redline at ");
+  Serial.println(REDLINE);
+}
+
+void setup_colors()
+{
+  CRGB base_colors[NUM_COLORS] = {CRGB::Green, CRGB::Green, CRGB::Yellow, CRGB::Red};
+  int step = NUM_LEDS / NUM_COLORS;
+  for(int c=0; c<NUM_COLORS; c++)
+  {
+    for (int i=0; i<step; i++) {
+      colors[i] = base_colors[c];
+    }
+  }
+}
+
 void displayRPM(unsigned char buffer[8])
 {
-  int rpm = (buffer[2] << 8) & buffer[3];
+  int rpm = (buffer[2] << 8) | buffer[3];
   Serial.println(rpm);
   resetAllLEDs(CRGB::Black);
-  if (rpm > 7800)
-    leds[5] = CRGB::Red;
-  if (rpm > 6600)
-    leds[4] = CRGB::Yellow;
-  if (rpm > 5400)
-    leds[3] = CRGB::Yellow;
-  if (rpm > 4100)
-    leds[2] = CRGB::Green;
-  if (rpm > 2800)
-    leds[1] = CRGB::Green;
-  if (rpm > 500)
-    leds[0] = CRGB::Green;
+  char i = NUM_LEDS;
+  while(i>0) {
+    i--;
+    if (rpm > breakpoints[i])
+      leds[i] = colors[i]; 
+  }
   FastLED.show();
 } 
 
