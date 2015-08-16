@@ -56,9 +56,8 @@ void setup_colors()
   }
 }
 
-void displayRPM(unsigned char buffer[8])
+void displayRPM(int rpm)
 {
-  int rpm = (buffer[2] << 8) | buffer[3];
   resetAllLEDs(CRGB::Black);
   char i = NUM_LEDS;
   while(i>0) {
@@ -68,35 +67,54 @@ void displayRPM(unsigned char buffer[8])
   }
 } 
 
-void check_temperature(unsigned char buffer[8])
+void check_temperature(int temperatureDegC)
 {
-  if((!warmed_up) && (buffer[5] > 178)) // Temperature: DegC * 1.6 + 64. So, 71C * 1.6 + 64 = 178 temp constant for "warm engine"
+  if((!warmed_up) && temperatureDegC > 71) // Temperature: DegC * 1.6 + 64. So, 71C * 1.6 + 64 = 178 temp constant for "warm engine"
   {
     warmed_up = 1;
     setup_breakpoints(WARM_REDLINE);
   }
 }
 
-void MCP2515_ISR()
+int extractRPM(unsigned char buffer[8])
 {
-     flag_recv = 1;
+  return (buffer[2] << 8) | buffer[3];
 }
 
-void setup()
+int extractShiftLight(unsigned char buffer[8])
 {
-    pinMode(STATUS_LED_PIN, OUTPUT);
-    pinMode(DATA_LED_PIN, OUTPUT);
-    Serial.begin(115200);
-    setup_breakpoints(COLD_REDLINE);
-    setup_colors();
-    Serial.println("Booting LEDs");
-    resetAllLEDs(CRGB::Purple);
-    FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
-    FastLED.show();
-    Serial.println("Booting CANbus");
-    
-START_INIT:
+  return buffer[6] & 0x1;
+}
 
+int extractTemperature(unsigned char buffer[8])
+{ // returns temperature in Degrees C
+  return (buffer[5] - 64 ) / 1.6;
+}
+
+void handle_message(unsigned char buffer[8])
+{
+  int temperature = extractTemperature(buffer);
+  check_temperature(temperature);
+  if (extractShiftLight(buffer)) {
+    resetAllLEDs(CRGB::Red);
+  } else {
+    int rpm = extractRPM(buffer);
+    displayRPM(rpm);
+  }
+}
+
+void initialize_leds()
+{
+  Serial.println("Booting LEDs");
+  resetAllLEDs(CRGB::Purple);
+  FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
+  FastLED.show();
+}
+
+void initialize_can()
+{
+  Serial.println("Booting CANbus");
+  START_INIT:
     if(CAN_OK == CAN.begin(CAN_1000KBPS))
     {
         Serial.println("CAN BUS Shield init ok!");
@@ -112,6 +130,22 @@ START_INIT:
     attachInterrupt(0, MCP2515_ISR, FALLING); // start interrupt
 }
 
+void MCP2515_ISR()
+{
+     flag_recv = 1;
+}
+
+void setup()
+{
+    pinMode(STATUS_LED_PIN, OUTPUT);
+    pinMode(DATA_LED_PIN, OUTPUT);
+    Serial.begin(115200);
+    setup_breakpoints(COLD_REDLINE);
+    setup_colors();
+    initialize_leds();
+    initialize_can();
+}
+
 void loop()
 {
     if(flag_recv)
@@ -120,13 +154,7 @@ void loop()
         flag_recv = 0;
         CAN.readMsgBuf(&len, buf);
         if (len > 6) {
-          check_temperature(buf);
-          if(buf[6] & 1) // shift light
-          {
-            resetAllLEDs(CRGB::Red);
-          } else {
-            displayRPM(buf);
-          }
+          handle_message(buf);
         }
         FastLED.show();
         digitalWrite(DATA_LED_PIN, LOW);
