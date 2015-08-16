@@ -39,8 +39,8 @@ void setup_breakpoints(int redline)
   breakpoints[0] = BASE_RPM;
   for(int i=1; i<NUM_LEDS; i++) {
     breakpoints[i] = breakpoints[i-1] + step;
-    Serial.println("Breakpoint at ");
-    Serial.print(breakpoints[i]);
+    Serial.print("Breakpoint at ");
+    Serial.println(breakpoints[i]);
   }
   Serial.print("Redline at ");
   Serial.println(redline);
@@ -66,8 +66,16 @@ void displayRPM(unsigned char buffer[8])
     if (rpm > breakpoints[i])
       leds[i] = colors[i]; 
   }
-  FastLED.show();
 } 
+
+void check_temperature(unsigned char buffer[8])
+{
+  if((!warmed_up) && (buffer[5] > 178)) // Temperature: DegC * 1.6 + 64. So, 71C * 1.6 + 64 = 178 temp constant for "warm engine"
+  {
+    warmed_up = 1;
+    setup_breakpoints(WARM_REDLINE);
+  }
+}
 
 void MCP2515_ISR()
 {
@@ -112,13 +120,15 @@ void loop()
         flag_recv = 0;
         CAN.readMsgBuf(&len, buf);
         if (len > 6) {
-          if((!warmed_up) && (buf[5] > 178)) // Temperature: DegC * 1.6 + 64. So, 71C * 1.6 + 64 = 178 temp constant for "warm engine"
+          check_temperature(buf);
+          if(buf[6] & 1) // shift light
           {
-            warmed_up = 1;
-            setup_breakpoints(WARM_REDLINE);
+            resetAllLEDs(CRGB::Red);
+          } else {
+            displayRPM(buf);
           }
-          displayRPM(buf);
         }
+        FastLED.show();
         digitalWrite(DATA_LED_PIN, LOW);
     }
 }
