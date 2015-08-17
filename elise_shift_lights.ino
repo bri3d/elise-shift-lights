@@ -16,18 +16,17 @@
 MCP_CAN CAN(CAN_CS_PIN);
 
 CRGB leds[NUM_LEDS];
-int breakpoints[NUM_LEDS];
+uint_fast16_t breakpoints[NUM_LEDS];
 CRGB colors[NUM_LEDS];
 
-unsigned char warmed_up = 0;
-unsigned char flag_recv = 0;
-unsigned char len = 0;
-unsigned char buf[8];
-char str[20];
+uint_fast8_t warmed_up = 0;
+uint_fast8_t flag_recv = 0;
+uint_fast8_t len = 0;
+uint8_t buf[8];
 
 void resetAllLEDs(CRGB color)
 {
-   for (int i=0; i<NUM_LEDS; i++)
+   for (uint_fast8_t i=0; i<NUM_LEDS; i++)
     {
       leds[i] = color;
     }
@@ -35,9 +34,9 @@ void resetAllLEDs(CRGB color)
 
 void setup_breakpoints(int redline)
 {
-  int step = redline / NUM_LEDS;
+  uint_fast16_t step = redline / NUM_LEDS;
   breakpoints[0] = BASE_RPM;
-  for(int i=1; i<NUM_LEDS; i++) {
+  for(uint_fast8_t i=1; i<NUM_LEDS; i++) {
     breakpoints[i] = breakpoints[i-1] + step;
     Serial.print("Breakpoint at ");
     Serial.println(breakpoints[i]);
@@ -49,17 +48,17 @@ void setup_breakpoints(int redline)
 void setup_colors()
 {
   CRGB base_colors[NUM_COLORS] = {CRGB::Green, CRGB::Green, CRGB::Yellow, CRGB::Red};
-  int divider = NUM_LEDS / NUM_COLORS;
-  for(int c=0; c<NUM_LEDS; c++)
+  uint_fast8_t divider = NUM_LEDS / NUM_COLORS;
+  for(uint_fast8_t c=0; c<NUM_LEDS; c++)
   {
       colors[c] = base_colors[c/divider];
   }
 }
 
-void displayRPM(int rpm)
+void displayRPM(uint_fast16_t rpm)
 {
   resetAllLEDs(CRGB::Black);
-  char i = NUM_LEDS;
+  uint_fast8_t i = NUM_LEDS;
   while(i>0) {
     i--;
     if (rpm > breakpoints[i])
@@ -67,7 +66,7 @@ void displayRPM(int rpm)
   }
 } 
 
-void check_temperature(int temperatureDegC)
+void check_temperature(int_fast8_t temperatureDegC)
 {
   if((!warmed_up) && temperatureDegC > 71) // Temperature: DegC * 1.6 + 64. So, 71C * 1.6 + 64 = 178 temp constant for "warm engine"
   {
@@ -76,24 +75,24 @@ void check_temperature(int temperatureDegC)
   }
 }
 
-int extractRPM(unsigned char buffer[8])
+uint_fast16_t extractRPM(uint8_t buffer[8])
 {
   return (buffer[2] << 8) | buffer[3];
 }
 
-int extractShiftLight(unsigned char buffer[8])
+uint_fast8_t extractShiftLight(uint8_t buffer[8])
 {
   return buffer[6] & 0x1;
 }
 
-int extractTemperature(unsigned char buffer[8])
+int_fast8_t extractTemperature(uint8_t buffer[8])
 { // returns temperature in Degrees C
   return (buffer[5] - 64 ) / 1.6;
 }
 
-void handle_message(unsigned char buffer[8])
+void handle_message(uint8_t buffer[8])
 {
-  int temperature = extractTemperature(buffer);
+  int_fast8_t temperature = extractTemperature(buffer);
   check_temperature(temperature);
   if (extractShiftLight(buffer)) {
     resetAllLEDs(CRGB::Red);
