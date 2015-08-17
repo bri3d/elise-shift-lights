@@ -3,6 +3,8 @@
 #include <mcp_can.h>
 #include <mcp_can_dfs.h>
 
+//#define IS_MY08
+
 #define CAN_CS_PIN 10
 #define NUM_LEDS 8
 #define DATA_PIN 6
@@ -21,8 +23,6 @@ CRGB colors[NUM_LEDS];
 
 uint_fast8_t warmed_up = 0;
 uint_fast8_t flag_recv = 0;
-uint_fast8_t len = 0;
-uint8_t buf[8];
 
 void resetAllLEDs(CRGB color)
 {
@@ -114,7 +114,11 @@ void initialize_can()
 {
   Serial.println("Booting CANbus");
   START_INIT:
+#ifdef IS_MY08
+    if(CAN_OK == CAN.begin(CAN_500KBPS))
+#else
     if(CAN_OK == CAN.begin(CAN_1000KBPS))
+#endif
     {
         Serial.println("CAN BUS Shield init ok!");
         digitalWrite(STATUS_LED_PIN, HIGH);
@@ -149,10 +153,13 @@ void loop()
 {
     if(flag_recv)
     {
+        uint8_t len = 0;
+        uint8_t buf[8];
+        uint32_t id = 0;
         digitalWrite(DATA_LED_PIN, HIGH);
         flag_recv = 0;
-        CAN.readMsgBuf(&len, buf);
-        if (len > 6) {
+        CAN.readMsgBufID(&id, &len, buf);
+        if ((0x400 == id) && (len > 6)) {
           handle_message(buf);
         }
         FastLED.show();
