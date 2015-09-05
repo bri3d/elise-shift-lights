@@ -158,9 +158,12 @@ void loop()
         uint32_t id = 0;
         digitalWrite(DATA_LED_PIN, HIGH);
         flag_recv = 0;
-        CAN.readMsgBufID(&id, &len, buf);
-        if ((0x400 == id) && (len > 6)) {
-          handle_message(buf);
+        while (CAN_MSGAVAIL == CAN.checkReceive()) { // If both buffers are full, ensure we drain both so we don't get stuck in IRQ
+          id = CAN.getCanId();
+          CAN.readMsgBuf(&len, buf);
+          if ((0x400 == id) && (len > 6)) {
+            handle_message(buf);
+          }
         }
         FastLED.show();
         digitalWrite(DATA_LED_PIN, LOW);
