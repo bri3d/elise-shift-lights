@@ -6,7 +6,7 @@
 //#define IS_MY08
 
 #define CAN_CS_PIN 10
-#define NUM_LEDS 8
+#define NUM_LEDS 16
 #define DATA_PIN 6
 #define STATUS_LED_PIN 7
 #define DATA_LED_PIN 8
@@ -105,8 +105,9 @@ void handle_message(uint8_t buffer[8])
 void initialize_leds()
 {
   Serial.println("Booting LEDs");
-  resetAllLEDs(CRGB::Purple);
-  FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
+  resetAllLEDs(CRGB::Orange);
+  FastLED.setBrightness(100);
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
   FastLED.show();
 }
 
